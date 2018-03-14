@@ -44,15 +44,15 @@ struct InterfaceDiscovery
 fn list_ipv4_addrs() -> Vec<Ipv4Addr> {
     use std::net::SocketAddr;
 
-    let interfaces: Result<Vec<_>, _> = ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
+    ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
         if let Some(SocketAddr::V4(socket_addr)) = iface.addr {
             let ipv4 = socket_addr.ip();
             if ipv4.is_private() {
-                return Some(ipv4);
+                return Some(ipv4.clone());
             }
         }
         None
-    }).collect();
+    }).collect()
 }
 
 #[cfg(target_family = "windows")]
