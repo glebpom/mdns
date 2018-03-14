@@ -46,10 +46,12 @@ fn list_ipv4_addrs() -> Vec<Ipv4Addr> {
 
     let interfaces: Result<Vec<_>, _> = ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
         if let Some(SocketAddr::V4(socket_addr)) = iface.addr {
-            Some(socket_addr.ip())
-        } else {
-            None
+            let ipv4 = socket_addr.ip();
+            if ipv4.is_private() {
+                return Some(ipv4);
+            }
         }
+        None
     }).collect();
 }
 
@@ -60,13 +62,14 @@ fn list_ipv4_addrs() -> Vec<Ipv4Addr> {
             adapter
                 .ip_addresses()
                 .iter()
-                .filter_map(|&(ref ip, _)|
+                .filter_map(|&(ref ip, _)| {
                     if let IpAddr::V4(ipv4) = *ip {
-                        Some(ipv4)
-                    } else {
-                        None
+                        if ipv4.is_private() {
+                            return Some(ipv4);
+                        }
                     }
-                )
+                    None
+                })
         )
         .collect()
 }
