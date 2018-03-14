@@ -70,7 +70,12 @@ use self::io::Io;
 extern crate mio;
 extern crate dns_parser as dns;
 extern crate net2;
+
+#[cfg(target_family = "unix")]
 extern crate ifaces;
+
+#[cfg(target_family = "windows")]
+extern crate ipconfig;
 
 #[macro_use]
 extern crate error_chain;

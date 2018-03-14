@@ -1,15 +1,19 @@
 use {Error, Response, Io};
 
 use std::collections::VecDeque;
-use std::net::{SocketAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::net::ToSocketAddrs;
 
 use mio::net::UdpSocket;
 use mio;
 use dns;
 use net2;
+#[cfg(target_family = "unix")]
 use ifaces;
+#[cfg(target_family = "windows")]
+use ipconfig;
 
+#[cfg(target_family = "unix")]
 use net2::unix::UnixUdpBuilderExt;
 
 /// The IP address for the mDNS multicast socket.
@@ -36,16 +40,43 @@ struct InterfaceDiscovery
     socket: UdpSocket,
 }
 
+#[cfg(target_family = "unix")]
+fn list_ipv4_addrs() -> Vec<Ipv4Addr> {
+    use std::net::SocketAddr;
+
+    let interfaces: Result<Vec<_>, _> = ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
+        if let Some(SocketAddr::V4(socket_addr)) = iface.addr {
+            Some(socket_addr.ip())
+        } else {
+            None
+        }
+    }).collect();
+}
+
+#[cfg(target_family = "windows")]
+fn list_ipv4_addrs() -> Vec<Ipv4Addr> {
+    ipconfig::get_adapters().unwrap().iter()
+        .flat_map(|adapter|
+            adapter
+                .ip_addresses()
+                .iter()
+                .filter_map(|&(ref ip, _)|
+                    if let IpAddr::V4(ipv4) = *ip {
+                        Some(ipv4)
+                    } else {
+                        None
+                    }
+                )
+        )
+        .collect()
+}
+
 impl mDNS
 {
     pub fn new(service_name: &str, io: &mut Io) -> Result<Self, Error> {
-        let interfaces: Result<Vec<_>, _> = ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
-            if let Some(SocketAddr::V4(socket_addr)) = iface.addr {
-                Some(InterfaceDiscovery::new(socket_addr.ip(), io))
-            } else {
-                None
-            }
-        }).collect();
+        let interfaces: Result<Vec<_>, _> = list_ipv4_addrs().iter()
+            .map(|ip| InterfaceDiscovery::new(ip, io))
+            .collect();
 
         let interfaces = interfaces?;
 
@@ -79,11 +110,13 @@ impl InterfaceDiscovery
     fn new(interface_addr: &Ipv4Addr, io: &mut Io) -> Result<Self, Error> {
         let multicast_addr = MULTICAST_ADDR.parse().unwrap();
 
-        let socket = net2::UdpBuilder::new_v4()?
-                                  .reuse_address(true)?
-                                  .reuse_port(true)?
-                                  .bind(("0.0.0.0", MULTICAST_PORT))?;
-        let socket = UdpSocket::from_socket(socket)?;
+        let socket = net2::UdpBuilder::new_v4()?;
+        socket.reuse_address(true)?;
+
+        #[cfg(target_family = "unix")]
+            socket.reuse_port(true)?;
+
+        let socket = UdpSocket::from_socket(socket.bind(("0.0.0.0", MULTICAST_PORT))?)?;
 
         socket.set_multicast_loop_v4(true)?;
         socket.set_multicast_ttl_v4(255)?;
