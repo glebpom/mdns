@@ -77,7 +77,7 @@ impl Discovery {
     fn poll(&mut self) -> Result<(), Error> {
         loop {
             let poll_timeout = self.finish_at.map(|finish_at| {
-                finish_at.duration_since(SystemTime::now()).unwrap()
+                finish_at.duration_since(SystemTime::now()).unwrap_or(Duration::from_millis(100))
             });
 
             self.io.poll(&mut self.mdns, poll_timeout)?;
