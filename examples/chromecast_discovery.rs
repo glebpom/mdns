@@ -2,11 +2,16 @@ extern crate mdns;
 
 use mdns::{Record, RecordKind};
 use std::net::IpAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
 fn main() {
-    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+    let should_stop = Arc::new(AtomicBool::new(false));
+    should_stop.store(true, Ordering::SeqCst);
+    
+    for response in mdns::discover::all(SERVICE_NAME, should_stop.clone()).unwrap() {
         let response = response.unwrap();
 
         let addr = response.records()

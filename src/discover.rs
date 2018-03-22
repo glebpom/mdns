@@ -18,6 +18,8 @@ use {mDNS, Error, Response};
 
 use std::collections::VecDeque;
 use std::time::{SystemTime, Duration};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use io;
 
@@ -38,10 +40,13 @@ pub struct Discovery {
     finish_at: Option<SystemTime>,
     /// Whether we should ignore empty responses.
     ignore_empty: bool,
+
+    /// Whethere pool should stop
+    should_stop: Arc<AtomicBool>,
 }
 
 /// Gets an iterator over all responses for a given service.
-pub fn all<S>(service_name: S) -> Result<Discovery, Error> where S: AsRef<str> {
+pub fn all<S>(service_name: S, should_stop: Arc<AtomicBool>) -> Result<Discovery, Error> where S: AsRef<str> {
     let mut io = io::Io::new()?;
     let mdns = mDNS::new(service_name.as_ref(), &mut io)?;
 
@@ -51,6 +56,7 @@ pub fn all<S>(service_name: S) -> Result<Discovery, Error> where S: AsRef<str> {
         responses: VecDeque::new(),
         finish_at: None,
         ignore_empty: true,
+        should_stop,
     })
 }
 
@@ -76,6 +82,11 @@ impl Discovery {
 
     fn poll(&mut self) -> Result<(), Error> {
         loop {
+            if self.should_stop.load(Ordering::SeqCst) {
+                // Stop request received
+                break;
+            };
+
             let poll_timeout = self.finish_at.map(|finish_at| {
                 finish_at.duration_since(SystemTime::now()).unwrap_or(Duration::from_millis(100))
             });
