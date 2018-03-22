@@ -12,6 +12,8 @@ use net2;
 use ifaces;
 #[cfg(target_family = "windows")]
 use ipconfig;
+#[cfg(target_family = "windows")]
+use std::net::IpAddr;
 
 #[cfg(target_family = "unix")]
 use net2::unix::UnixUdpBuilderExt;
